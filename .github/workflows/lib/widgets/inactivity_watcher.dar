@@ -1,0 +1,87 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+
+typedef TimeoutCallback = void Function();
+
+class InactivityWatcher extends StatefulWidget {
+  final Widget child;
+  final Duration timeout;
+  final TimeoutCallback? onTimeout;
+
+  const InactivityWatcher({
+    Key? key,
+    required this.child,
+    this.timeout = const Duration(minutes: 2),
+    this.onTimeout,
+  }) : super(key: key);
+
+  @override
+  State<InactivityWatcher> createState() => _InactivityWatcherState();
+}
+
+class _InactivityWatcherState extends State<InactivityWatcher> with WidgetsBindingObserver {
+  Timer? _timer;
+  Timer? _backgroundTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initTimer();
+  }
+
+  void _initTimer() {
+    _timer?.cancel();
+    _timer = Timer(widget.timeout, _handleTimeout);
+  }
+
+  void _resetTimer() {
+    _timer?.cancel();
+    _timer = Timer(widget.timeout, _handleTimeout);
+  }
+
+  Future<void> _handleTimeout() async {
+    if (widget.onTimeout != null) {
+      try {
+        widget.onTimeout!();
+        return;
+      } catch (_) {}
+    }
+    // simply navigate to login route
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _backgroundTimer?.cancel();
+      _backgroundTimer = null;
+      _resetTimer();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _backgroundTimer?.cancel();
+      _backgroundTimer = Timer(const Duration(seconds: 30), () async {
+        await _handleTimeout();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
+    _backgroundTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => _resetTimer(),
+      onPointerMove: (_) => _resetTimer(),
+      onPointerUp: (_) => _resetTimer(),
+      child: widget.child,
+    );
+  }
+}
