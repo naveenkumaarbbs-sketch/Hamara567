@@ -1,0 +1,56 @@
+name: Build Android APK & Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build_apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+
+      - name: Create flutter project in CI
+        run: |
+          set -e
+          # create a temp flutter app named 'app'
+          flutter create app
+          # overwrite the generated lib/main.dart and pubspec.yaml with the ones from this repo (if present)
+          if [ -f "./lib/main.dart" ]; then
+            cp ./lib/main.dart ./app/lib/main.dart
+          fi
+          if [ -f "./pubspec.yaml" ]; then
+            cp ./pubspec.yaml ./app/pubspec.yaml
+          fi
+          cd app
+          flutter pub get
+          flutter build apk --release --no-shrink
+        shell: bash
+
+      - name: Upload built APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hamara567-apk
+          path: app/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Create GitHub Release and attach APK
+        uses: ncipollo/release-action@v1
+        with:
+          tag: v${{ github.run_number }}
+          name: "Hamara567 APK v${{ github.run_number }}"
+          files: app/build/app/outputs/flutter-apk/app-release.apk
+          token: ${{ secrets.GITHUB_TOKEN }}
